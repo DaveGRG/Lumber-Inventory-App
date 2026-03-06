@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  --color-grg-green: #4CB31D;
+  --color-grg-brown: #5C3D1E;
+  --color-grg-sage: #6BBF3D;
+  --color-grg-moss: #2D5016;
+  --color-grg-tan: #F0F0E8;
+}
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100dvh;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar {
+  display: none;                    /* Chrome/Safari: hide scrollbar */
+}
+
+body {
+  min-width: 320px;
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+/* Hi-Viz Mode */
+.hiviz {
+  background: #ffffff;
+  color: #000000;
+}
+
+.hiviz button {
+  border: 3px solid #000000 !important;
+  font-weight: 900 !important;
+}
+
+.hiviz .text-grg-green {
+  color: #000000;
+}
+
+/* Hide scrollbar on filter chip strips */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
