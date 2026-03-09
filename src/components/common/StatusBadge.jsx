@@ -11,6 +11,10 @@ const STATUS_CONFIG = {
     label: 'In Transit',
     style: { backgroundColor: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A' },
   },
+  partial: {
+    label: 'Partial',
+    style: { backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' },
+  },
   complete: {
     label: 'Complete',
     style: { backgroundColor: '#D1FAE5', color: '#065F46', border: '1px solid #A7F3D0' },

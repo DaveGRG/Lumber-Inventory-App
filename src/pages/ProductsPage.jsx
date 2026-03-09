@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, X, ChevronRight, Minus, ArrowLeft, Trash2, Upload, Check } from 'lucide-react';
+import { Plus, X, ChevronRight, Minus, ArrowLeft, Trash2, Upload, Check, AlertTriangle } from 'lucide-react';
 import {
   collection, addDoc, doc, updateDoc, onSnapshot, getDoc, setDoc,
   query, where, orderBy, serverTimestamp,
@@ -70,7 +70,7 @@ function ProductFormPopup({ skus, user, jobs, onClose, product }) {
   const searchResults = useMemo(() => {
     if (!skuSearch.trim()) return [];
     return smartSearch(skus, skuSearch, ['sku', 'category'])
-      .filter(s => !bom.some(b => b.skuId === s.id) && s.status !== 'discontinued')
+      .filter(s => !bom.some(b => b.skuId === s.id))
       .slice(0, 6);
   }, [skus, skuSearch, bom]);
 
@@ -599,7 +599,7 @@ function AddMaterialPopup({ skus, existingBom, onAdd, onClose }) {
   const results = useMemo(() => {
     if (!search.trim()) return [];
     return smartSearch(skus, search, ['sku', 'category'])
-      .filter(s => !existingBom.some(b => b.skuId === s.id) && s.status !== 'discontinued')
+      .filter(s => !existingBom.some(b => b.skuId === s.id))
       .slice(0, 8);
   }, [skus, search, existingBom]);
 
@@ -645,6 +645,8 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
   const [completeSaving, setCompleteSaving] = useState(false);
   const [undoTarget, setUndoTarget] = useState(null);
   const [undoSaving, setUndoSaving] = useState(false);
+  const [pullQtys, setPullQtys] = useState({});
+  const [shortfallInfo, setShortfallInfo] = useState(null);
 
   useEffect(() => {
     return onSnapshot(doc(db, 'products', productId),
@@ -675,29 +677,85 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
     return invDoc?.quantity ?? 0;
   };
 
-  const handleSubmitPull = async () => {
+  const getPullQty = (skuId, defaultQty) => pullQtys[skuId] ?? defaultQty;
+  const setPullQty = (skuId, qty) => setPullQtys(prev => ({ ...prev, [skuId]: Math.max(0, qty) }));
+
+  // Pre-check stock before pulling — show shortfall warning if needed
+  const handlePullClick = () => {
     if (checked.size === 0) return;
+    const checkedItems = bom.filter(b => checked.has(b.skuId) && !b.pulled && !b.nonInventory);
+    const itemsWithStock = checkedItems.map(b => {
+      const requestedQty = getPullQty(b.skuId, b.shortQty ?? b.qty);
+      const stock = getStock(b.skuId);
+      const actualPull = Math.min(requestedQty, stock);
+      const short = requestedQty - actualPull;
+      return { ...b, requestedQty, stock, actualPull, short };
+    });
+
+    const hasShortfall = itemsWithStock.some(i => i.short > 0);
+    const allZeroStock = itemsWithStock.every(i => i.actualPull === 0);
+
+    if (allZeroStock) {
+      setShortfallInfo({ items: itemsWithStock, allZero: true });
+      return;
+    }
+    if (hasShortfall) {
+      setShortfallInfo({ items: itemsWithStock, allZero: false });
+      return;
+    }
+    // All sufficient — pull directly
+    handleSubmitPull(itemsWithStock);
+  };
+
+  const handleSubmitPull = async (preCalculatedItems) => {
+    if (!preCalculatedItems || preCalculatedItems.length === 0) return;
     setSaving(true);
+    setShortfallInfo(null);
     try {
       const pullNumber = await generateRecordNumber('pulls');
-      const pulledItems = bom.filter(b => checked.has(b.skuId) && !b.pulled);
 
-      for (const item of pulledItems) {
-        await adjustInventory({
-          skuId: item.skuId, sku: item.sku,
-          location, delta: -item.qty,
-          reason: `Material pull: ${pullNumber}`,
-          relatedId: product.id,
-          userId: user.uid, userName: user.name || user.email,
-        });
+      for (const item of preCalculatedItems) {
+        if (item.actualPull > 0) {
+          await adjustInventory({
+            skuId: item.skuId, sku: item.sku,
+            location, delta: -item.actualPull,
+            reason: `Material pull: ${pullNumber}`,
+            relatedId: product.id,
+            userId: user.uid, userName: user.name || user.email,
+          });
+        }
       }
 
-      // Update BOM pulled flags with pull metadata
+      // Build a lookup from pre-calculated items
+      const pullLookup = {};
+      for (const item of preCalculatedItems) {
+        pullLookup[item.skuId] = item;
+      }
+
+      // Update BOM with pull metadata
       const now = new Date().toISOString();
       const pulledByName = user.name || user.email;
-      const updatedBom = bom.map(b =>
-        checked.has(b.skuId) ? { ...b, pulled: true, pulledAt: now, pulledBy: pulledByName } : b
-      );
+      const updatedBom = bom.map(b => {
+        const calc = pullLookup[b.skuId];
+        if (!calc) return b;
+        const prevPulled = b.pulledQty ?? 0;
+        const totalPulled = prevPulled + calc.actualPull;
+        const fullyPulled = totalPulled >= b.qty;
+        const result = {
+          ...b,
+          pulledQty: totalPulled,
+          pulledAt: now,
+          pulledBy: pulledByName,
+        };
+        if (fullyPulled) {
+          result.pulled = true;
+          delete result.shortQty;
+        } else {
+          result.pulled = false;
+          result.shortQty = b.qty - totalPulled;
+        }
+        return result;
+      });
       const newAllPulled = updatedBom.filter(b => !b.nonInventory).every(b => b.pulled);
 
       await updateDoc(doc(db, 'products', product.id), {
@@ -712,7 +770,12 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
         productName: product.productName,
         location,
         jobId: product.jobId || null,
-        items: pulledItems.map(i => ({ skuId: i.skuId, sku: i.sku, qty: i.qty })),
+        items: preCalculatedItems.map(i => ({
+          skuId: i.skuId, sku: i.sku,
+          qty: i.actualPull, originalQty: i.requestedQty,
+          ...(i.short > 0 ? { shortQty: i.short } : {}),
+          type: (i.pulledQty ?? 0) > 0 ? 'remainder' : i.short > 0 ? 'partial' : 'full',
+        })),
         notes: '',
         pulledBy: user.name || user.email,
         pulledByUid: user.uid,
@@ -725,11 +788,12 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
         skuId: null, sku: null, location,
         userId: user.uid, userName: user.name || user.email,
         oldValue: null, newValue: pullNumber,
-        reason: `Material pull: ${product.productName} from ${locLabel(location)} (${pulledItems.length} SKU${pulledItems.length !== 1 ? 's' : ''})`,
+        reason: `Material pull: ${product.productName} from ${locLabel(location)} (${preCalculatedItems.length} SKU${preCalculatedItems.length !== 1 ? 's' : ''})`,
         relatedId: product.id, timestamp: serverTimestamp(),
       });
 
       setChecked(new Set());
+      setPullQtys({});
     } catch {
       // Error handled silently
     }
@@ -739,17 +803,20 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
   const handleUndoPull = async (bomItem) => {
     setUndoSaving(true);
     try {
+      const restoredQty = bomItem.pulledQty ?? bomItem.qty;
       await adjustInventory({
         skuId: bomItem.skuId, sku: bomItem.sku,
-        location, delta: bomItem.qty,
+        location, delta: restoredQty,
         reason: `Pull undone: ${product.productName}`,
         relatedId: product.id,
         userId: user.uid, userName: user.name || user.email,
       });
 
-      const updatedBom = bom.map(b =>
-        b.skuId === bomItem.skuId ? { ...b, pulled: false } : b
-      );
+      const updatedBom = bom.map(b => {
+        if (b.skuId !== bomItem.skuId) return b;
+        const { pulledQty, pulledAt, pulledBy, shortQty, ...rest } = b;
+        return { ...rest, pulled: false };
+      });
 
       await updateDoc(doc(db, 'products', product.id), {
         bom: updatedBom,
@@ -774,11 +841,11 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
   const handleDelete = async () => {
     setDeleteSaving(true);
     try {
-      // Restore inventory for any pulled items (skip non-inventory)
-      for (const item of bom.filter(b => b.pulled && !b.nonInventory)) {
+      // Restore inventory for any pulled or partially pulled items (skip non-inventory)
+      for (const item of bom.filter(b => (b.pulled || b.pulledQty > 0) && !b.nonInventory)) {
         await adjustInventory({
           skuId: item.skuId, sku: item.sku,
-          location, delta: item.qty,
+          location, delta: item.pulledQty ?? item.qty,
           reason: `Product deleted — inventory restored: ${product.productName}`,
           relatedId: product.id,
           userId: user.uid, userName: user.name || user.email,
@@ -804,7 +871,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
         event: 'PRODUCT_COMPLETED',
         skuId: null, sku: null, location,
         userId: user.uid, userName: user.name || user.email,
-        oldValue: 'pulled', newValue: 'complete',
+        oldValue: product.status, newValue: 'complete',
         reason: `Product completed: ${product.productName}`,
         relatedId: product.id, timestamp: serverTimestamp(),
       });
@@ -893,18 +960,87 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
           </div>
         ) : (
           <div className="flex flex-col">
-            {bom.map((item, idx) => {
+            {bom.flatMap((item, idx) => {
               const isNonInventory = item.nonInventory;
               const stock = isNonInventory ? null : getStock(item.skuId);
               const isPulled = item.pulled;
+              const isPartial = !item.pulled && (item.pulledQty ?? 0) > 0;
               const isChecked = checked.has(item.skuId);
+              const defaultQty = isPartial ? (item.shortQty ?? item.qty) : item.qty;
+              const rowBg = idx % 2 === 1 ? 'bg-[#F0F0E8]/20' : 'bg-white';
+
+              // Partial items render TWO rows: pulled portion + remainder
+              if (isPartial) {
+                return [
+                  // Row 1: Pulled portion with Partial badge + undo
+                  <div key={`${item.skuId}-partial`}
+                    className={`flex items-center gap-3 px-4 py-3 min-h-[60px] border-b border-gray-100 ${rowBg}`}>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <StatusBadge status="partial" />
+                      <button onClick={() => setUndoTarget(item)}
+                        className="min-h-[32px] min-w-[32px] flex items-center justify-center text-gray-400 hover:text-red-500 rounded"
+                        title="Undo pull">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-gray-800">{item.sku}</p>
+                      <p className="text-xs text-gray-400">
+                        {`Pulled: ${item.pulledQty} of ${item.qty}`}
+                        {item.pulledBy && (
+                          <span> · {item.pulledBy}{item.pulledAt ? ` ${new Date(item.pulledAt).toLocaleDateString()}` : ''}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>,
+                  // Row 2: Remainder with checkbox + qty stepper
+                  <div key={`${item.skuId}-remainder`}
+                    className={`flex items-center gap-3 px-4 py-2.5 min-h-[52px] border-b border-gray-100 ${rowBg}`}
+                    style={{ borderLeft: '3px solid #F59E0B' }}>
+                    <button
+                      onClick={() => setChecked(prev => {
+                        const next = new Set(prev);
+                        if (next.has(item.skuId)) next.delete(item.skuId);
+                        else next.add(item.skuId);
+                        return next;
+                      })}
+                      className={`min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg border-2 transition-colors flex-shrink-0 ${
+                        isChecked ? 'border-[#4CB31D] bg-[#4CB31D]' : 'border-gray-300 bg-white hover:border-gray-400'
+                      }`}>
+                      {isChecked && <Check size={16} className="text-white" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: '#92400E' }}>
+                        Remainder: {item.shortQty} of {item.sku}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {`Stock: ${stock}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) - 1)}
+                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        −
+                      </button>
+                      <span className="min-w-[28px] text-center text-sm font-semibold text-gray-800">
+                        {getPullQty(item.skuId, defaultQty)}
+                      </span>
+                      <button
+                        onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) + 1)}
+                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        +
+                      </button>
+                    </div>
+                  </div>,
+                ];
+              }
+
+              // Normal single row for all other item types
               return (
                 <div key={item.skuId || `non-inv-${idx}`}
-                  className={`flex items-center gap-3 px-4 py-3 min-h-[60px] border-b border-gray-100 ${
-                    idx % 2 === 1 ? 'bg-[#F0F0E8]/20' : 'bg-white'
-                  }`}>
+                  className={`flex items-center gap-3 px-4 py-3 min-h-[60px] border-b border-gray-100 ${rowBg}`}>
 
-                  {/* Checkbox, pulled badge, or non-inventory dash */}
                   {isNonInventory ? (
                     <div className="min-h-[36px] min-w-[36px] flex items-center justify-center flex-shrink-0 text-gray-300">
                       —
@@ -933,16 +1069,37 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                     </button>
                   )}
 
-                  {/* SKU info */}
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium truncate ${isNonInventory ? 'text-gray-400 italic' : 'text-gray-800'}`}>{item.sku}</p>
                     <p className="text-xs text-gray-400">
-                      {isNonInventory ? `Qty: ${item.qty} · Non-inventory` : `Qty: ${item.qty} · Stock: ${stock}`}
+                      {isNonInventory
+                        ? `Qty: ${item.qty} · Non-inventory`
+                        : isPulled
+                          ? `Pulled: ${item.pulledQty ?? item.qty} of ${item.qty} · Stock: ${stock}`
+                          : `Need: ${item.qty} · Stock: ${stock}`}
                       {isPulled && item.pulledBy && (
-                        <span> · Pulled by {item.pulledBy}{item.pulledAt ? ` on ${new Date(item.pulledAt).toLocaleDateString()}` : ''}</span>
+                        <span> · {item.pulledBy}{item.pulledAt ? ` ${new Date(item.pulledAt).toLocaleDateString()}` : ''}</span>
                       )}
                     </p>
                   </div>
+
+                  {!isNonInventory && !isPulled && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) - 1)}
+                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        −
+                      </button>
+                      <span className="min-w-[28px] text-center text-sm font-semibold text-gray-800">
+                        {getPullQty(item.skuId, defaultQty)}
+                      </span>
+                      <button
+                        onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) + 1)}
+                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        +
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -952,7 +1109,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
 
       {/* Bottom action bar */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 px-4 py-3 flex flex-col gap-2">
-        {allPulled && product.status !== 'complete' && (
+        {product.status !== 'complete' && (
           <button onClick={() => setCompleteTarget(true)}
             className="w-full min-h-[48px] rounded-lg text-sm font-semibold text-white"
             style={{ backgroundColor: '#065F46' }}>
@@ -961,14 +1118,14 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
         )}
         <div className="flex gap-3">
           {anyChecked ? (
-            <button onClick={handleSubmitPull} disabled={saving}
+            <button onClick={handlePullClick} disabled={saving}
               className="flex-1 min-h-[48px] rounded-lg text-sm font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: '#4CB31D' }}>
               {saving ? 'Pulling…' : `Submit Pulled (${checked.size})`}
             </button>
           ) : (
             <div className="flex-1 min-h-[48px] flex items-center justify-center text-sm text-gray-400">
-              {allPulled && product.status !== 'complete' ? '' : bom.length > 0 ? 'Check materials to pull' : 'Add materials to get started'}
+              {bom.length > 0 ? 'Check materials to pull' : 'Add materials to get started'}
             </div>
           )}
         </div>
@@ -988,11 +1145,12 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
         open={deleteTarget}
         title="Delete Product?"
         message={`"${product.productName}" will be deleted.${
-          bom.some(b => b.pulled) ? ' Pulled inventory will be restored.' : ''
+          bom.some(b => b.pulled || b.pulledQty > 0) ? ' Pulled inventory will be restored.' : ''
         }`}
         confirmLabel={deleteSaving ? 'Deleting…' : 'Delete'}
         cancelLabel="Cancel"
         destructive
+        saving={deleteSaving}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(false)}
       />
@@ -1000,9 +1158,12 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
       <ConfirmDialog
         open={completeTarget}
         title="Mark Complete?"
-        message={`All materials have been pulled for "${product.productName}". Mark this product as complete?`}
+        message={`Mark "${product.productName}" as complete?${
+          !allPulled ? ' Note: not all materials have been pulled.' : ''
+        }`}
         confirmLabel={completeSaving ? 'Completing…' : 'Complete'}
         cancelLabel="Cancel"
+        saving={completeSaving}
         onConfirm={handleComplete}
         onCancel={() => setCompleteTarget(false)}
       />
@@ -1010,13 +1171,66 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
       <ConfirmDialog
         open={!!undoTarget}
         title="Undo Pull?"
-        message={`"${undoTarget?.sku}" (×${undoTarget?.qty}) will be returned to ${locLabel(location)} inventory.`}
+        message={`"${undoTarget?.sku}" (×${undoTarget?.pulledQty ?? undoTarget?.qty}) will be returned to ${locLabel(location)} inventory.`}
         confirmLabel={undoSaving ? 'Undoing…' : 'Undo'}
         cancelLabel="Cancel"
         destructive
+        saving={undoSaving}
         onConfirm={() => handleUndoPull(undoTarget)}
         onCancel={() => setUndoTarget(null)}
       />
+
+      {/* Shortfall Warning Dialog */}
+      {shortfallInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShortfallInfo(null)}>
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm flex flex-col max-h-[80dvh]"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-5 pt-5 pb-3 border-b border-gray-100">
+              <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
+              <h3 className="text-base font-semibold text-gray-800">
+                {shortfallInfo.allZero ? 'No Stock Available' : 'Insufficient Stock'}
+              </h3>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              <p className="text-sm text-gray-600 mb-3">
+                {shortfallInfo.allZero
+                  ? 'None of the selected items have stock available to pull.'
+                  : 'Some items have less stock than requested:'}
+              </p>
+              <div className="flex flex-col gap-2">
+                {shortfallInfo.items.map(item => (
+                  <div key={item.skuId} className={`px-3 py-2 rounded-lg text-sm ${
+                    item.actualPull === 0 ? 'bg-red-50 border border-red-200' : 'bg-amber-50 border border-amber-200'
+                  }`}>
+                    <p className="font-medium text-gray-800">{item.sku}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      {item.actualPull === 0
+                        ? `Need ${item.requestedQty} — Cannot pull (no stock)`
+                        : item.short > 0
+                          ? `Need ${item.requestedQty}, Stock ${item.stock} — Will pull ${item.actualPull} (short ${item.short})`
+                          : `Need ${item.requestedQty}, Stock ${item.stock} — OK`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setShortfallInfo(null)}
+                className="flex-1 min-h-[44px] rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              {!shortfallInfo.allZero && (
+                <button onClick={() => handleSubmitPull(shortfallInfo.items)}
+                  className="flex-1 min-h-[44px] rounded-lg text-sm font-semibold text-white"
+                  style={{ backgroundColor: '#D97706' }}>
+                  Pull Available
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
