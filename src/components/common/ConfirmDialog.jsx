@@ -7,6 +7,7 @@ export default function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   destructive = false,
+  saving = false,
   onConfirm,
   onCancel,
 }) {
@@ -16,7 +17,7 @@ export default function ConfirmDialog({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-      onClick={onCancel}
+      onClick={saving ? undefined : onCancel}
     >
       <div
         className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
@@ -25,8 +26,9 @@ export default function ConfirmDialog({
         {/* Large X close button — top right */}
         <button
           onClick={onCancel}
+          disabled={saving}
           aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg transition-colors"
+          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg transition-colors disabled:opacity-30"
         >
           <X size={22} />
         </button>
@@ -41,13 +43,15 @@ export default function ConfirmDialog({
         <div className="flex gap-3 mt-6">
           <button
             onClick={onCancel}
-            className="flex-1 min-h-[44px] rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            disabled={saving}
+            className="flex-1 min-h-[44px] rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 min-h-[44px] rounded-lg text-sm font-medium transition-colors text-white ${
+            disabled={saving}
+            className={`flex-1 min-h-[44px] rounded-lg text-sm font-medium transition-colors text-white disabled:opacity-50 ${
               destructive
                 ? 'bg-red-600 hover:bg-red-700'
                 : 'bg-grg-green hover:bg-grg-moss'

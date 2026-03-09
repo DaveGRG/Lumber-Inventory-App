@@ -185,6 +185,7 @@ export default function InventoryPage() {
               key={cat}
               title={CATEGORY_LABELS[cat]}
               badge={hasBelowPar ? <CategoryBelowParDot /> : null}
+              forceOpen={!!searchQuery.trim()}
             >
               {items.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-gray-400 italic">No items</p>

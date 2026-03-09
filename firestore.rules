@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: is the requester a signed-in @grgplayscapes.com user?
+    function isGRGUser() {
+      return request.auth != null &&
+             request.auth.token.email.matches('.*@grgplayscapes\\.com$');
+    }
+
+    // All authenticated GRG users can read/write everything
+    // (role restrictions are enforced in the UI via RoleGate — not in rules yet)
+    match /{document=**} {
+      allow read, write: if isGRGUser();
+    }
+  }
+}

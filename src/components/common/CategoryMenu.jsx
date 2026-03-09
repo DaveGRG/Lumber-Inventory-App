@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function CategoryMenu({
   title,
   children,
   defaultOpen = false,
+  forceOpen = false,
   badge = null,
   count = null,
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || forceOpen);
+
+  // When forceOpen changes (e.g. search active), override local state
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
 
   return (
     <div className="border-b border-gray-200 last:border-b-0">

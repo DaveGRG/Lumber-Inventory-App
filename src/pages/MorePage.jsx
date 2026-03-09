@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { ChevronRight, Shield, Plus, X, Trash2, RotateCcw, Minus, Download, Send } from 'lucide-react';
 import {
   collection, addDoc, doc, setDoc, updateDoc, deleteDoc,
-  onSnapshot, query, where, orderBy, serverTimestamp,
+  onSnapshot, query, where, orderBy, serverTimestamp, limit,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -35,6 +35,35 @@ function formatDate(ts) {
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+
+// Audit log filter → event type mapping
+const FILTER_MAP = {
+  'Stock Adjustment': ['INVENTORY_ADJUSTED'],
+  'Transfer': ['TRANSFER_CREATED', 'TRANSFER_SHIPPED', 'TRANSFER_RECEIVED'],
+  'Pick': ['PRODUCT_PULLED', 'PULL_UNDONE'],
+  'Physical Count': ['RECONCILIATION_SUBMITTED'],
+  'Item Created': ['SKU_CREATED'],
+  'Item Deleted': ['ITEM_DELETED', 'SKU_DELETED'],
+  'Material Added': ['MATERIAL_ADDED'],
+  'Transfer Discrepancy': ['TRANSFER_DISCREPANCY'],
+};
+
+const EVENT_LABEL = {
+  INVENTORY_ADJUSTED: 'Stock Adjustment',
+  TRANSFER_CREATED: 'Transfer Created',
+  TRANSFER_SHIPPED: 'Transfer Shipped',
+  TRANSFER_RECEIVED: 'Transfer Received',
+  PRODUCT_PULLED: 'Material Pick',
+  PULL_UNDONE: 'Pick Undone',
+  RECONCILIATION_SUBMITTED: 'Physical Count',
+  SKU_CREATED: 'Item Created',
+  ITEM_DELETED: 'Item Deleted',
+  SKU_DELETED: 'Item Deleted',
+  MATERIAL_ADDED: 'Material Added',
+  TRANSFER_DISCREPANCY: 'Transfer Discrepancy',
+  ITEM_RESTORED: 'Item Restored',
+  PAR_EDITED: 'Par Edited',
+};
 
 function getTrashLabel(item) {
   const d = item?.data ?? {};
@@ -572,6 +601,83 @@ function UserManagementView({ onBack, user }) {
   );
 }
 
+// ─── RESTORE CENTER COLLAPSIBLE ─────────────────────────────────────────────
+function RestoreCenterCollapsible({ cardBg, loadingTrash, trashItems, onRestore, onPermDelete }) {
+  const [open, setOpen] = useState(false);
+  const count = trashItems.length;
+
+  return (
+    <div className={`rounded-xl ${cardBg} overflow-hidden`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between p-4 text-left"
+      >
+        <div>
+          <h3 className="font-semibold" style={{ color: '#2D5016' }}>
+            Restore Center
+            {count > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1">
+                {count}
+              </span>
+            )}
+          </h3>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Items are permanently deleted 30 days after being trashed.
+          </p>
+        </div>
+        {open ? (
+          <ChevronRight size={18} className="rotate-90 text-gray-400 flex-shrink-0 ml-3 transition-transform" />
+        ) : (
+          <ChevronRight size={18} className="text-gray-400 flex-shrink-0 ml-3 transition-transform" />
+        )}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4">
+          {loadingTrash ? (
+            <p className="text-sm text-gray-400">Loading…</p>
+          ) : count === 0 ? (
+            <p className="text-sm text-gray-400 italic">Trash is empty.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {trashItems.map(item => (
+                <div key={item.id}
+                  className="flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-100">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {getTrashLabel(item)}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {item.originalCollection} · Deleted by {item.deletedBy} · {formatDate(item.deletedAt)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onRestore(item)}
+                    className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-white flex-shrink-0"
+                    style={{ backgroundColor: '#4CB31D' }}
+                    aria-label="Restore"
+                    title="Restore"
+                  >
+                    <RotateCcw size={15} />
+                  </button>
+                  <button
+                    onClick={() => onPermDelete(item)}
+                    className="min-h-[36px] min-w-[36px] flex items-center justify-center text-red-500 hover:text-red-700 rounded flex-shrink-0"
+                    aria-label="Permanently delete"
+                    title="Delete forever"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ADMIN CONTROL VIEW ──────────────────────────────────────────────────────
 function AdminControlView({ onBack, user }) {
   const [trashItems, setTrashItems] = useState([]);
@@ -694,51 +800,14 @@ function AdminControlView({ onBack, user }) {
       <div className="flex-1 overflow-y-auto pb-20 md:pb-4">
         <div className="p-4 flex flex-col gap-4">
 
-          {/* ── Restore Center ──────────────────────────────────────── */}
-          <div className={`rounded-xl p-4 ${cardBg}`}>
-            <h3 className="font-semibold mb-1" style={{ color: '#2D5016' }}>Restore Center</h3>
-            <p className="text-sm text-gray-500 mb-3">
-              Items are permanently deleted 30 days after being trashed.
-            </p>
-            {loadingTrash ? (
-              <p className="text-sm text-gray-400">Loading…</p>
-            ) : trashItems.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">Trash is empty.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {trashItems.map(item => (
-                  <div key={item.id}
-                    className="flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {getTrashLabel(item)}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {item.originalCollection} · Deleted by {item.deletedBy} · {formatDate(item.deletedAt)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setRestoreTarget(item)}
-                      className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-white flex-shrink-0"
-                      style={{ backgroundColor: '#4CB31D' }}
-                      aria-label="Restore"
-                      title="Restore"
-                    >
-                      <RotateCcw size={15} />
-                    </button>
-                    <button
-                      onClick={() => setPermDeleteTarget(item)}
-                      className="min-h-[36px] min-w-[36px] flex items-center justify-center text-red-500 hover:text-red-700 rounded flex-shrink-0"
-                      aria-label="Permanently delete"
-                      title="Delete forever"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* ── Restore Center (collapsible) ────────────────────────── */}
+          <RestoreCenterCollapsible
+            cardBg={cardBg}
+            loadingTrash={loadingTrash}
+            trashItems={trashItems}
+            onRestore={setRestoreTarget}
+            onPermDelete={setPermDeleteTarget}
+          />
 
           {/* ── Bulk Import ─────────────────────────────────────────── */}
           <div className={`rounded-xl p-4 ${cardBg}`}>
@@ -929,7 +998,7 @@ function AddProductPopup({ user, skus, onClose }) {
   const searchResults = useMemo(() => {
     if (!skuSearch.trim()) return [];
     return smartSearch(skus, skuSearch, ['sku', 'category'])
-      .filter(s => !bom.some(b => b.skuId === s.id) && s.status !== 'discontinued')
+      .filter(s => !bom.some(b => b.skuId === s.id))
       .slice(0, 6);
   }, [skus, skuSearch, bom]);
 
@@ -1535,13 +1604,233 @@ function QuoteRequestsView({ onBack }) {
   );
 }
 
+// ─── AUDIT LOG VIEW ─────────────────────────────────────────────────────────
+function AuditLogView({ onBack }) {
+  const [events, setEvents] = useState([]);
+  const [loadingAudit, setLoadingAudit] = useState(true);
+  const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    const q = query(collection(db, 'auditLog'), orderBy('timestamp', 'desc'), limit(500));
+    const unsub = onSnapshot(
+      q,
+      snap => {
+        setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoadingAudit(false);
+      },
+      () => setLoadingAudit(false)
+    );
+    return unsub;
+  }, []);
+
+  const filtered = useMemo(() => {
+    let list = events;
+    if (activeFilter) {
+      const allowed = FILTER_MAP[activeFilter] ?? [];
+      list = list.filter(e => allowed.includes(e.event));
+    }
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      from.setHours(0, 0, 0, 0);
+      list = list.filter(e => {
+        if (!e.timestamp) return false;
+        const d = e.timestamp.toDate ? e.timestamp.toDate() : new Date(e.timestamp);
+        return d >= from;
+      });
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      list = list.filter(e => {
+        if (!e.timestamp) return false;
+        const d = e.timestamp.toDate ? e.timestamp.toDate() : new Date(e.timestamp);
+        return d <= to;
+      });
+    }
+    if (!search.trim()) return list;
+    return smartSearch(
+      list.map(e => ({
+        ...e,
+        _sku: e.sku ?? '',
+        _reason: e.reason ?? '',
+        _user: e.userName ?? '',
+        _date: e.timestamp ? formatDate(e.timestamp) : '',
+      })),
+      search,
+      ['_sku', '_reason', '_user', '_date']
+    );
+  }, [events, activeFilter, search, dateFrom, dateTo]);
+
+  const handleExport = () => {
+    const rows = [['Date', 'Event', 'SKU', 'Location', 'Reason', 'User', 'Old Value', 'New Value']];
+    filtered.forEach(e => {
+      rows.push([
+        formatDate(e.timestamp),
+        EVENT_LABEL[e.event] ?? e.event,
+        e.sku ?? '',
+        e.location ?? '',
+        e.reason ?? '',
+        e.userName ?? '',
+        e.oldValue ?? '',
+        e.newValue ?? '',
+      ]);
+    });
+    const csv = rows.map(r =>
+      r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Subpage header */}
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-200">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={onBack}
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full hover:bg-gray-100"
+            aria-label="Back"
+          >
+            <ChevronRight size={22} className="rotate-180" />
+          </button>
+          <h2 onClick={onBack} className="text-lg font-bold flex-1 cursor-pointer hover:underline" style={{ color: '#2D5016' }}>Audit Log</h2>
+
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 pb-2">
+          <SearchBar value={search} onChange={setSearch} placeholder="Search SKU, user, reason…" />
+        </div>
+
+        {/* Date range */}
+        <div className="flex items-center gap-2 px-4 pb-2">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-grg-sage min-h-[36px]"
+          />
+          <span className="text-xs text-gray-400">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-grg-sage min-h-[36px]"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="text-xs text-gray-400 hover:text-gray-700 min-h-[36px] px-1"
+              aria-label="Clear dates">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter chips */}
+        <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
+          {Object.keys(FILTER_MAP).map(label => (
+            <button
+              key={label}
+              onClick={() => setActiveFilter(prev => prev === label ? null : label)}
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors min-h-[32px]"
+              style={
+                activeFilter === label
+                  ? { backgroundColor: '#4CB31D', color: '#fff' }
+                  : { backgroundColor: '#f3f4f6', color: '#4b5563' }
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Event list */}
+      <div className="flex-1 overflow-y-auto pb-20 md:pb-4">
+        {loadingAudit ? (
+          <Spinner />
+        ) : filtered.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-gray-400 text-sm">
+              {search || activeFilter ? 'No matching events.' : 'No audit events yet.'}
+            </p>
+          </div>
+        ) : (
+          filtered.map((e, idx) => (
+            <div
+              key={e.id}
+              className={`px-4 py-3 border-b border-gray-100 ${
+                idx % 2 === 1 ? 'bg-[#F0F0E8]/20' : 'bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span
+                      className="text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: '#4CB31D' }}
+                    >
+                      {EVENT_LABEL[e.event] ?? e.event}
+                    </span>
+                    {e.sku && (
+                      <span className="text-sm font-medium text-gray-800">{e.sku}</span>
+                    )}
+                    {e.location && (
+                      <span className="text-xs text-gray-400 uppercase">{e.location}</span>
+                    )}
+                  </div>
+                  {e.reason && (
+                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">{e.reason}</p>
+                  )}
+                  {e.oldValue !== null && e.oldValue !== undefined &&
+                   e.newValue !== null && e.newValue !== undefined && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {e.oldValue} → {e.newValue}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs text-gray-400">{formatDate(e.timestamp)}</p>
+                  {e.userName && (
+                    <p className="text-xs text-gray-400 mt-0.5">{e.userName}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── RECONCILIATION REPORTS VIEW ─────────────────────────────────────────────
 function ReconciliationReportsView({ onBack }) {
+  const { user } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'farm' | 'mke'
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'reconciliationReports'), where('isDeleted', '==', false), orderBy('submittedAt', 'desc'));
@@ -1550,6 +1839,23 @@ function ReconciliationReportsView({ onBack }) {
       err => { console.error('[ReconciliationReports] Query error:', err); setError(err.message); setLoading(false); }
     );
   }, []);
+
+  // One-time migration: rename old RC#/RR# formats to RR# 0001 style
+  useEffect(() => {
+    if (loading || reports.length === 0) return;
+    // Sort oldest first for sequential numbering
+    const sorted = [...reports].sort((a, b) => {
+      const ta = a.submittedAt?.toDate ? a.submittedAt.toDate() : new Date(0);
+      const tb = b.submittedAt?.toDate ? b.submittedAt.toDate() : new Date(0);
+      return ta - tb;
+    });
+    sorted.forEach((r, i) => {
+      const expected = `RR# ${String(i + 1).padStart(4, '0')}`;
+      if (r.rcNumber !== expected) {
+        updateDoc(doc(db, 'reconciliationReports', r.id), { rcNumber: expected }).catch(() => {});
+      }
+    });
+  }, [loading, reports]);
 
   const filtered = useMemo(() => {
     if (activeTab === 'all') return reports;
@@ -1578,6 +1884,14 @@ function ReconciliationReportsView({ onBack }) {
     a.download = `${report.rcNumber}-${report.location}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteSaving(true);
+    try { await softDelete('reconciliationReports', deleteTarget.id, user.uid, user.name || user.email); } catch {}
+    setDeleteSaving(false);
+    setDeleteTarget(null);
   };
 
   return (
@@ -1655,17 +1969,35 @@ function ReconciliationReportsView({ onBack }) {
                     ))}
                   </div>
                 )}
-                {/* Desktop-only download */}
-                <button
-                  onClick={() => handleDownloadPdf(r)}
-                  className="hidden md:flex items-center gap-1.5 mt-3 text-xs font-medium text-gray-500 hover:text-grg-green">
-                  <Download size={14} /> Download Report
-                </button>
+                {/* Actions row */}
+                <div className="flex items-center gap-4 mt-3">
+                  <button
+                    onClick={() => handleDownloadPdf(r)}
+                    className="hidden md:flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-grg-green">
+                    <Download size={14} /> Download Report
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(r)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-600">
+                    <Trash2 size={14} /> Delete
+                  </button>
+                </div>
               </div>
             )}
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Report?"
+        message={`"${deleteTarget?.rcNumber}" will be soft-deleted. Recoverable from Admin Control within 30 days.`}
+        confirmLabel={deleteSaving ? 'Deleting…' : 'Delete'}
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -1737,9 +2069,14 @@ function ProjectsView({ onBack, user }) {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleteSaving(true);
-    try { await softDelete('jobs', deleteTarget.id, user.uid, user.name || user.email); } catch {}
+    try {
+      await softDelete('jobs', deleteTarget.id, user.uid, user.name || user.email);
+    } catch (err) {
+      console.error('Failed to delete job:', err);
+    }
     setDeleteSaving(false);
     setDeleteTarget(null);
+    setExpanded(null);
   };
 
   return (
@@ -1870,6 +2207,7 @@ export default function MorePage() {
     if (location.state?.reset) setView('menu');
   }, [location.state?.reset]);
 
+  if (view === 'auditLog') return <AuditLogView onBack={() => setView('menu')} />;
   if (view === 'vendorContacts') return <VendorContactsView onBack={() => setView('menu')} user={user} />;
   if (view === 'userManagement') return <UserManagementView onBack={() => setView('menu')} user={user} />;
   if (view === 'quoteRequests') return <QuoteRequestsView onBack={() => setView('menu')} />;
@@ -1890,6 +2228,7 @@ export default function MorePage() {
     { id: 'reconciliationReports', label: 'Reconciliation Reports', desc: 'View past physical count reports.', active: true },
     { id: 'productLibrary', label: 'Product Library', desc: 'Browse and assign product templates.', active: true },
     { id: 'projects', label: 'Projects', desc: 'Browse completed and active projects.', active: true },
+    { id: 'auditLog', label: 'Audit Log', desc: 'Browse all inventory and system events.', active: true },
   ];
 
   return (

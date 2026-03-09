@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { ChevronRight, Plus, X, Trash2, Download, Minus, ClipboardList, AlertTriangle } from 'lucide-react';
 import {
   collection, addDoc, setDoc, doc, updateDoc, serverTimestamp,
-  onSnapshot, query, orderBy, where, Timestamp, limit,
+  onSnapshot, query, orderBy, where, Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -36,34 +36,6 @@ function BelowParWarning({ count }) {
   );
 }
 
-// Audit log filter → event type mapping
-const FILTER_MAP = {
-  'Stock Adjustment': ['INVENTORY_ADJUSTED'],
-  'Transfer': ['TRANSFER_CREATED', 'TRANSFER_SHIPPED', 'TRANSFER_RECEIVED'],
-  'Pick': ['PRODUCT_PULLED', 'PULL_UNDONE'],
-  'Physical Count': ['RECONCILIATION_SUBMITTED'],
-  'Item Created': ['SKU_CREATED'],
-  'Item Deleted': ['ITEM_DELETED', 'SKU_DELETED'],
-  'Material Added': ['MATERIAL_ADDED'],
-  'Transfer Discrepancy': ['TRANSFER_DISCREPANCY'],
-};
-
-const EVENT_LABEL = {
-  INVENTORY_ADJUSTED: 'Stock Adjustment',
-  TRANSFER_CREATED: 'Transfer Created',
-  TRANSFER_SHIPPED: 'Transfer Shipped',
-  TRANSFER_RECEIVED: 'Transfer Received',
-  PRODUCT_PULLED: 'Material Pick',
-  PULL_UNDONE: 'Pick Undone',
-  RECONCILIATION_SUBMITTED: 'Physical Count',
-  SKU_CREATED: 'Item Created',
-  ITEM_DELETED: 'Item Deleted',
-  SKU_DELETED: 'Item Deleted',
-  MATERIAL_ADDED: 'Material Added',
-  TRANSFER_DISCREPANCY: 'Transfer Discrepancy',
-  ITEM_RESTORED: 'Item Restored',
-  PAR_EDITED: 'Par Edited',
-};
 
 function formatDate(ts) {
   if (!ts) return '—';
@@ -470,223 +442,6 @@ function ManageSkusView({ onBack, user }) {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
-    </div>
-  );
-}
-
-// ─── Audit Log Subpage ──────────────────────────────────────────────────────────
-function AuditLogView({ onBack }) {
-  const [events, setEvents] = useState([]);
-  const [loadingAudit, setLoadingAudit] = useState(true);
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState(null);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-
-  useEffect(() => {
-    const q = query(collection(db, 'auditLog'), orderBy('timestamp', 'desc'), limit(500));
-    const unsub = onSnapshot(
-      q,
-      snap => {
-        setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setLoadingAudit(false);
-      },
-      () => setLoadingAudit(false)
-    );
-    return unsub;
-  }, []);
-
-  const filtered = useMemo(() => {
-    let list = events;
-    if (activeFilter) {
-      const allowed = FILTER_MAP[activeFilter] ?? [];
-      list = list.filter(e => allowed.includes(e.event));
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      from.setHours(0, 0, 0, 0);
-      list = list.filter(e => {
-        if (!e.timestamp) return false;
-        const d = e.timestamp.toDate ? e.timestamp.toDate() : new Date(e.timestamp);
-        return d >= from;
-      });
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      to.setHours(23, 59, 59, 999);
-      list = list.filter(e => {
-        if (!e.timestamp) return false;
-        const d = e.timestamp.toDate ? e.timestamp.toDate() : new Date(e.timestamp);
-        return d <= to;
-      });
-    }
-    if (!search.trim()) return list;
-    return smartSearch(
-      list.map(e => ({
-        ...e,
-        _sku: e.sku ?? '',
-        _reason: e.reason ?? '',
-        _user: e.userName ?? '',
-        _date: e.timestamp ? formatDate(e.timestamp) : '',
-      })),
-      search,
-      ['_sku', '_reason', '_user', '_date']
-    );
-  }, [events, activeFilter, search, dateFrom, dateTo]);
-
-  const handleExport = () => {
-    const rows = [['Date', 'Event', 'SKU', 'Location', 'Reason', 'User', 'Old Value', 'New Value']];
-    filtered.forEach(e => {
-      rows.push([
-        formatDate(e.timestamp),
-        EVENT_LABEL[e.event] ?? e.event,
-        e.sku ?? '',
-        e.location ?? '',
-        e.reason ?? '',
-        e.userName ?? '',
-        e.oldValue ?? '',
-        e.newValue ?? '',
-      ]);
-    });
-    const csv = rows.map(r =>
-      r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Subpage header */}
-      <div className="sticky top-0 z-20 bg-white border-b border-gray-200">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={onBack}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full hover:bg-gray-100"
-            aria-label="Back"
-          >
-            <ChevronRight size={22} className="rotate-180" />
-          </button>
-          <h2 onClick={onBack} className="text-lg font-bold flex-1 cursor-pointer hover:underline" style={{ color: '#2D5016' }}>Audit Log</h2>
-
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="px-4 pb-2">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search SKU, user, reason…" />
-        </div>
-
-        {/* Date range */}
-        <div className="flex items-center gap-2 px-4 pb-2">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-grg-sage min-h-[36px]"
-          />
-          <span className="text-xs text-gray-400">–</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-grg-sage min-h-[36px]"
-          />
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="text-xs text-gray-400 hover:text-gray-700 min-h-[36px] px-1"
-              aria-label="Clear dates">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        {/* Filter chips */}
-        <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
-          {Object.keys(FILTER_MAP).map(label => (
-            <button
-              key={label}
-              onClick={() => setActiveFilter(prev => prev === label ? null : label)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors min-h-[32px]"
-              style={
-                activeFilter === label
-                  ? { backgroundColor: '#4CB31D', color: '#fff' }
-                  : { backgroundColor: '#f3f4f6', color: '#4b5563' }
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Event list */}
-      <div className="flex-1 overflow-y-auto pb-20 md:pb-4">
-        {loadingAudit ? (
-          <Spinner />
-        ) : filtered.length === 0 ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-gray-400 text-sm">
-              {search || activeFilter ? 'No matching events.' : 'No audit events yet.'}
-            </p>
-          </div>
-        ) : (
-          filtered.map((e, idx) => (
-            <div
-              key={e.id}
-              className={`px-4 py-3 border-b border-gray-100 ${
-                idx % 2 === 1 ? 'bg-[#F0F0E8]/20' : 'bg-white'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span
-                      className="text-xs font-semibold uppercase tracking-wide"
-                      style={{ color: '#4CB31D' }}
-                    >
-                      {EVENT_LABEL[e.event] ?? e.event}
-                    </span>
-                    {e.sku && (
-                      <span className="text-sm font-medium text-gray-800">{e.sku}</span>
-                    )}
-                    {e.location && (
-                      <span className="text-xs text-gray-400 uppercase">{e.location}</span>
-                    )}
-                  </div>
-                  {e.reason && (
-                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">{e.reason}</p>
-                  )}
-                  {e.oldValue !== null && e.oldValue !== undefined &&
-                   e.newValue !== null && e.newValue !== undefined && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {e.oldValue} → {e.newValue}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs text-gray-400">{formatDate(e.timestamp)}</p>
-                  {e.userName && (
-                    <p className="text-xs text-gray-400 mt-0.5">{e.userName}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 }
@@ -1454,7 +1209,7 @@ function PhysicalCountView({ onBack, user }) {
       const rc = await generateRecordNumber('reconciliationReports');
       setRcNumber(rc);
     } catch {
-      setRcNumber('RC#—');
+      setRcNumber('RR# —');
     }
     setSubmitError('');
     setShowSubmitModal(true);
@@ -1792,7 +1547,6 @@ export default function DashboardPage() {
   const belowParCount = belowParAll.length;
 
   if (view === 'manageSkus') return <ManageSkusView onBack={() => setView('menu')} user={user} />;
-  if (view === 'auditLog') return <AuditLogView onBack={() => setView('menu')} />;
   if (view === 'parReport') return <ParReportView onBack={() => setView('menu')} user={user} />;
   if (view === 'physicalCount') return <PhysicalCountView onBack={() => setView('menu')} user={user} />;
   if (view === 'quoteRequests') return <QuoteRequestsView onBack={() => setView('menu')} />;
@@ -1822,13 +1576,6 @@ export default function DashboardPage() {
       id: 'physicalCount',
       label: 'Physical Count',
       desc: 'Conduct a physical count and submit reconciliation report.',
-      active: true,
-      badge: null,
-    },
-    {
-      id: 'auditLog',
-      label: 'Audit Log',
-      desc: 'Browse all inventory and system events.',
       active: true,
       badge: null,
     },
