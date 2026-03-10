@@ -124,7 +124,7 @@ function NewTransferPopup({ skus, user, onClose }) {
             <p className="text-xs text-gray-400 mt-0.5">{tNumber || '…'}</p>
           </div>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
             <X size={22} />
           </button>
         </div>
@@ -316,7 +316,7 @@ function EditTransferPopup({ transfer, skus, user, onClose }) {
             </p>
           </div>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
             <X size={22} />
           </button>
         </div>
@@ -407,7 +407,7 @@ function ViewSkusPopup({ transfer, onClose }) {
             <p className="text-xs text-gray-400">{locLabel(transfer.from)} → {locLabel(transfer.to)}</p>
           </div>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg ml-3">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg ml-3">
             <X size={22} />
           </button>
         </div>
@@ -505,7 +505,7 @@ function ShipPopup({ transfer, user, onClose }) {
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
         onClick={e => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+          className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
           <X size={22} />
         </button>
         <h2 className="text-base font-semibold pr-8 mb-0.5" style={{ color: '#2D5016' }}>Confirm Shipment</h2>
@@ -587,7 +587,7 @@ function ReceivePopup({ transfer, user, onClose }) {
         });
         // Decrement inTransitQty on "from" location (supports concurrent transfers)
         await updateDoc(doc(db, 'inventory', `${item.skuId}_${transfer.from}`), {
-          inTransitQty: increment(-item.requestedQty),
+          inTransitQty: increment(-item.receivedQty),
         });
       }
 
@@ -659,7 +659,7 @@ function ReceivePopup({ transfer, user, onClose }) {
             <p className="text-xs text-gray-400">{transfer.transferNumber} · {locLabel(transfer.from)} → {locLabel(transfer.to)}</p>
           </div>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg ml-3">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg ml-3">
             <X size={22} />
           </button>
         </div>
@@ -680,17 +680,17 @@ function ReceivePopup({ transfer, user, onClose }) {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setQty(item.skuId, rec - 1)}
-                      className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded border border-gray-200 bg-white text-base font-bold hover:bg-gray-50">
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded border border-gray-200 bg-white text-base font-bold hover:bg-gray-50">
                       −
                     </button>
                     <input
                       type="number" min="0" value={rec}
                       onChange={e => setQty(item.skuId, e.target.value)}
-                      className="flex-1 text-center text-base font-bold border border-gray-200 rounded min-h-[40px] focus:outline-none focus:ring-2 focus:ring-grg-sage bg-white"
+                      className="flex-1 text-center text-base font-bold border border-gray-200 rounded min-h-[44px] focus:outline-none focus:ring-2 focus:ring-grg-sage bg-white"
                     />
                     <button
                       onClick={() => setQty(item.skuId, rec + 1)}
-                      className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded border border-gray-200 bg-white text-base font-bold hover:bg-gray-50">
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded border border-gray-200 bg-white text-base font-bold hover:bg-gray-50">
                       +
                     </button>
                   </div>
@@ -745,6 +745,7 @@ export default function TransfersPage() {
   const [receiveTarget, setReceiveTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
+  const [listError, setListError] = useState('');
 
   useEffect(() => {
     const q = query(
@@ -753,8 +754,8 @@ export default function TransfersPage() {
       orderBy('createdAt', 'desc')
     );
     return onSnapshot(q,
-      snap => { setTransfers(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
-      (err) => { console.error('Transfers query error:', err); setLoading(false); }
+      snap => { setTransfers(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); setListError(''); },
+      (err) => { console.error('Transfers query error:', err); setLoading(false); setListError('Failed to load transfers. Check your connection.'); }
     );
   }, []);
 
@@ -808,6 +809,10 @@ export default function TransfersPage() {
           ))}
         </div>
       </div>
+
+      {listError && (
+        <div className="mx-4 mt-2 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{listError}</div>
+      )}
 
       {/* Transfer list */}
       <div className="flex-1 overflow-y-auto pb-20 md:pb-4">

@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { ChevronRight, Plus, X, Trash2, Download, Minus, ClipboardList, AlertTriangle } from 'lucide-react';
 import {
   collection, addDoc, setDoc, doc, updateDoc, serverTimestamp,
-  onSnapshot, query, orderBy, where, Timestamp,
+  onSnapshot, query, orderBy, where,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -123,7 +123,7 @@ function AddSkuPopup({ user, onClose }) {
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg"
+          className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg"
         >
           <X size={22} />
         </button>
@@ -446,31 +446,31 @@ function ManageSkusView({ onBack, user }) {
   );
 }
 
-// ─── Generate Quote Request Popup ──────────────────────────────────────────────
+// ─── Generate Purchase Request Popup ──────────────────────────────────────────────
 function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
-  const [vendors, setVendors] = useState([]);
-  const [vendorId, setVendorId] = useState('');
+  const [recipients, setRecipients] = useState([]);
+  const [recipientId, setRecipientId] = useState('');
   const [qtys, setQtys] = useState(() => {
     const map = {};
     selectedItems.forEach(item => { map[item.key] = 0; });
     return map;
   });
   const [notes, setNotes] = useState('');
-  const [qrNumber, setQrNumber] = useState('');
+  const [prNumber, setPrNumber] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  // Load vendors and generate QR# on mount
+  // Load team members for Send To dropdown and generate PR# on mount
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, 'vendors'), where('isDeleted', '==', false), orderBy('company')),
+      query(collection(db, 'users'), where('isActive', '==', true)),
       snap => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setVendors(list);
-        if (!vendorId && list.length > 0) setVendorId(list[0].id);
+        setRecipients(list);
+        if (!recipientId && list.length > 0) setRecipientId(list[0].id);
       }
     );
-    generateRecordNumber('quoteRequests').then(setQrNumber).catch(() => setQrNumber('QR#—'));
+    generateRecordNumber('quoteRequests').then(setPrNumber).catch(() => setPrNumber('PR#—'));
     return unsub;
   }, []);
 
@@ -479,11 +479,10 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
   };
 
   const handleSend = async () => {
-    if (!vendorId) { setError('Please select a vendor.'); return; }
-    const vendor = vendors.find(v => v.id === vendorId);
-    if (!vendor) { setError('Vendor not found.'); return; }
+    if (!recipientId) { setError('Please select a recipient.'); return; }
+    const recipient = recipients.find(r => r.id === recipientId);
+    if (!recipient) { setError('Recipient not found.'); return; }
 
-    const sentAt = new Date();
     setSending(true);
     try {
       const items = selectedItems.map(item => ({
@@ -494,11 +493,9 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
       }));
 
       await addDoc(collection(db, 'quoteRequests'), {
-        qrNumber,
-        vendorId: vendor.id,
-        vendorName: vendor.company,
-        vendorEmail: vendor.email,
-        vendorContact: vendor.contactName,
+        qrNumber: prNumber,
+        recipientName: recipient.name,
+        recipientEmail: recipient.email,
         items,
         notes: notes.trim(),
         sentAt: serverTimestamp(),
@@ -508,30 +505,30 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
       });
 
       await addDoc(collection(db, 'auditLog'), {
-        event: 'QUOTE_REQUEST_SENT',
+        event: 'PURCHASE_REQUEST_SENT',
         skuId: null,
         sku: null,
         location: null,
         userId: user.uid,
         userName: user.name || user.email,
         oldValue: null,
-        newValue: qrNumber,
-        reason: `Quote request sent to ${vendor.company} (${items.length} SKU${items.length !== 1 ? 's' : ''})`,
+        newValue: prNumber,
+        reason: `Purchase request sent to ${recipient.name} (${items.length} SKU${items.length !== 1 ? 's' : ''})`,
         relatedId: null,
         timestamp: serverTimestamp(),
       });
 
       triggerNotification(
-        NOTIFICATION_EVENTS.QUOTE_REQUEST_SENT,
-        `Quote Request ${qrNumber} — ${vendor.company}`,
-        `Quote Request: ${qrNumber}\nDate: ${new Date().toLocaleDateString()}\nVendor: ${vendor.company} (${vendor.contactName})\nEmail: ${vendor.email}\n\nItems:\n${items.map(i => `  ${i.sku} — Qty: ${i.qty}`).join('\n')}\n${notes.trim() ? `\nNotes: ${notes.trim()}` : ''}\n\nSent by: ${user.name || user.email}`,
-        { extraRecipients: [vendor.email] },
+        NOTIFICATION_EVENTS.PURCHASE_REQUEST_SENT,
+        `Purchase Request ${prNumber} — ${recipient.name}`,
+        `Purchase Request: ${prNumber}\nDate: ${new Date().toLocaleDateString()}\nSent to: ${recipient.name} (${recipient.email})\n\nThe following is a list of suggested lumber purchases:\n${items.map(i => `  ${i.sku} — Qty: ${i.qty}`).join('\n')}\n${notes.trim() ? `\nNotes: ${notes.trim()}` : ''}\n\nSent by: ${user.name || user.email}`,
+        { extraRecipients: [recipient.email] },
       );
 
       onSent();
       onClose();
     } catch {
-      setError('Failed to send quote request. Try again.');
+      setError('Failed to send purchase request. Try again.');
       setSending(false);
     }
   };
@@ -551,30 +548,30 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h2 className="text-base font-semibold" style={{ color: '#2D5016' }}>Generate Quote Request</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{qrNumber || '…'} · {today}</p>
+            <h2 className="text-base font-semibold" style={{ color: '#2D5016' }}>Generate Purchase Request</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{prNumber || '…'} · {today}</p>
           </div>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
             <X size={22} />
           </button>
         </div>
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-6 py-4 flex flex-col gap-4">
-          {/* Vendor */}
+          {/* Send To */}
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">Vendor *</label>
-            {vendors.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No vendors on file. Add one in More → Vendor Contacts.</p>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Send To *</label>
+            {recipients.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No recipients available.</p>
             ) : (
               <select
-                value={vendorId}
-                onChange={e => setVendorId(e.target.value)}
+                value={recipientId}
+                onChange={e => setRecipientId(e.target.value)}
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-grg-sage min-h-[44px] bg-white"
               >
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>{v.company} — {v.contactName}</option>
+                {recipients.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
               </select>
             )}
@@ -594,16 +591,24 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => adjustQty(item.key, -1)}
-                      className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded border border-gray-200 hover:bg-gray-100"
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded border border-gray-200 hover:bg-gray-100"
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="w-10 text-center text-sm font-semibold">
-                      {qtys[item.key] ?? 0}
-                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={qtys[item.key] ?? 0}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setQtys(prev => ({ ...prev, [item.key]: val }));
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      className="w-14 text-center text-sm font-semibold border border-gray-200 rounded py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
                     <button
                       onClick={() => adjustQty(item.key, 1)}
-                      className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded border border-gray-200 hover:bg-gray-100"
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded border border-gray-200 hover:bg-gray-100"
                     >
                       <Plus size={14} />
                     </button>
@@ -621,7 +626,7 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
               onChange={e => setNotes(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-grg-sage"
               rows={2}
-              placeholder="Optional notes for this quote request"
+              placeholder="Optional notes for this purchase request"
             />
           </div>
 
@@ -636,11 +641,11 @@ function GenerateQRPopup({ selectedItems, user, onClose, onSent }) {
           </button>
           <button
             onClick={handleSend}
-            disabled={sending || vendors.length === 0}
+            disabled={sending || recipients.length === 0}
             className="flex-1 min-h-[44px] rounded-lg text-sm font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: '#4CB31D' }}
           >
-            {sending ? 'Sending…' : 'Send Quote Request'}
+            {sending ? 'Sending…' : 'Send Purchase Request'}
           </button>
         </div>
       </div>
@@ -814,7 +819,7 @@ function ParReportView({ onBack, user }) {
             className="w-full min-h-[52px] rounded-xl text-white font-semibold text-base"
             style={{ backgroundColor: '#4CB31D' }}
           >
-            Generate Quote Request ({selected.size} item{selected.size !== 1 ? 's' : ''})
+            Generate Purchase Request ({selected.size} item{selected.size !== 1 ? 's' : ''})
           </button>
         </div>
       )}
@@ -1024,7 +1029,7 @@ function ReconciliationHistoryView({ onBack }) {
   );
 }
 
-// ─── Quote Requests View ────────────────────────────────────────────────────────
+// ─── Purchase Requests View ────────────────────────────────────────────────────────
 function QuoteRequestsView({ onBack }) {
   const [qrs, setQrs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1045,7 +1050,7 @@ function QuoteRequestsView({ onBack }) {
 
   const filtered = useMemo(() => {
     if (!search.trim()) return qrs;
-    return smartSearch(qrs, search, ['qrNumber', 'vendorName', 'sentBy']);
+    return smartSearch(qrs, search, ['qrNumber', 'recipientName', 'sentBy']);
   }, [qrs, search]);
 
   return (
@@ -1057,10 +1062,10 @@ function QuoteRequestsView({ onBack }) {
             aria-label="Back">
             <ChevronRight size={22} className="rotate-180" />
           </button>
-          <h2 onClick={onBack} className="text-lg font-bold flex-1 cursor-pointer hover:underline" style={{ color: '#2D5016' }}>Quote Requests</h2>
+          <h2 onClick={onBack} className="text-lg font-bold flex-1 cursor-pointer hover:underline" style={{ color: '#2D5016' }}>Purchase Requests</h2>
         </div>
         <div className="px-4 pb-3">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search QR#, vendor, sent by…" />
+          <SearchBar value={search} onChange={setSearch} placeholder="Search PR#, recipient, sent by…" />
         </div>
       </div>
 
@@ -1070,7 +1075,7 @@ function QuoteRequestsView({ onBack }) {
         ) : filtered.length === 0 ? (
           <div className="px-4 py-12 text-center">
             <p className="text-gray-400 text-sm">
-              {search ? `No quote requests match "${search}"` : 'No quote requests yet.'}
+              {search ? `No purchase requests match "${search}"` : 'No purchase requests yet.'}
             </p>
           </div>
         ) : filtered.map((qr, idx) => (
@@ -1081,7 +1086,7 @@ function QuoteRequestsView({ onBack }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-bold" style={{ color: '#2D5016' }}>{qr.qrNumber}</span>
-                  <span className="text-sm font-medium text-gray-700">{qr.vendorName}</span>
+                  <span className="text-sm font-medium text-gray-700">{qr.recipientName}</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {qr.items?.length ?? 0} SKU{(qr.items?.length ?? 0) !== 1 ? 's' : ''} · {formatDate(qr.sentAt)} · {qr.sentBy}
@@ -1108,11 +1113,8 @@ function QuoteRequestsView({ onBack }) {
                 {qr.notes ? (
                   <p className="text-xs text-gray-500 italic">{qr.notes}</p>
                 ) : null}
-                {qr.vendorContact && (
-                  <p className="text-xs text-gray-400 mt-1">Contact: {qr.vendorContact}</p>
-                )}
-                {qr.vendorEmail && (
-                  <p className="text-xs text-gray-400">Email: {qr.vendorEmail}</p>
+                {qr.recipientEmail && (
+                  <p className="text-xs text-gray-400 mt-1">Sent to: {qr.recipientEmail}</p>
                 )}
               </div>
             )}
@@ -1382,7 +1384,7 @@ function PhysicalCountView({ onBack, user }) {
                           <button
                             type="button"
                             onClick={() => handleDecrement(sku.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0"
+                            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0"
                             aria-label={`Decrease ${sku.sku}`}>
                             <Minus size={16} />
                           </button>
@@ -1392,14 +1394,14 @@ function PhysicalCountView({ onBack, user }) {
                             inputMode="numeric"
                             value={counted}
                             onChange={e => handleCountInput(sku.id, e.target.value)}
-                            className={`w-12 text-center text-sm font-semibold border rounded py-1 min-h-[32px] focus:outline-none focus:ring-2 focus:ring-grg-sage ${
+                            className={`w-12 text-center text-sm font-semibold border rounded py-1 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-grg-sage ${
                               isDifferent ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'
                             }`}
                           />
                           <button
                             type="button"
                             onClick={() => handleIncrement(sku.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0"
+                            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0"
                             aria-label={`Increase ${sku.sku}`}>
                             <Plus size={16} />
                           </button>
@@ -1437,7 +1439,7 @@ function PhysicalCountView({ onBack, user }) {
                 <p className="text-xs text-gray-400 mt-0.5">{rcNumber}</p>
               </div>
               <button onClick={() => setShowSubmitModal(false)}
-                className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-full hover:bg-gray-100"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full hover:bg-gray-100"
                 aria-label="Close">
                 <X size={18} />
               </button>
@@ -1568,7 +1570,7 @@ export default function DashboardPage() {
     {
       id: 'parReport',
       label: 'Par Report',
-      desc: 'View below-par items and generate quote requests.',
+      desc: 'View below-par items and generate purchase requests.',
       active: true,
       badge: belowParCount > 0 ? belowParCount : null,
     },

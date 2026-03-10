@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, X, ChevronRight, Minus, ArrowLeft, Trash2, Upload, Check, AlertTriangle } from 'lucide-react';
 import {
-  collection, addDoc, doc, updateDoc, onSnapshot, getDoc, setDoc,
+  collection, addDoc, doc, updateDoc, onSnapshot,
   query, where, orderBy, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -173,7 +173,7 @@ function ProductFormPopup({ skus, user, jobs, onClose, product }) {
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-base font-semibold" style={{ color: '#2D5016' }}>{isEdit ? 'Edit Product' : 'New Product'}</h2>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
             <X size={22} />
           </button>
         </div>
@@ -465,7 +465,7 @@ function CSVUploadPopup({ skus, inventory, user, jobs, onClose }) {
             {step === 1 ? 'Upload Product CSV' : 'Complete Product Setup'}
           </h2>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
             <X size={22} />
           </button>
         </div>
@@ -611,7 +611,7 @@ function AddMaterialPopup({ skus, existingBom, onAdd, onClose }) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold" style={{ color: '#2D5016' }}>Add Material</h3>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
             <X size={20} />
           </button>
         </div>
@@ -647,6 +647,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
   const [undoSaving, setUndoSaving] = useState(false);
   const [pullQtys, setPullQtys] = useState({});
   const [shortfallInfo, setShortfallInfo] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     return onSnapshot(doc(db, 'products', productId),
@@ -795,7 +796,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
       setChecked(new Set());
       setPullQtys({});
     } catch {
-      // Error handled silently
+      setActionError('Failed to pull materials. Please try again.');
     }
     setSaving(false);
   };
@@ -832,7 +833,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
         relatedId: product.id, timestamp: serverTimestamp(),
       });
     } catch {
-      // Error handled silently
+      setActionError('Failed to undo pull. Please try again.');
     }
     setUndoTarget(null);
     setUndoSaving(false);
@@ -916,6 +917,12 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-white">
+      {actionError && (
+        <div className="mx-4 mt-2 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+          {actionError}
+          <button onClick={() => setActionError('')} className="ml-2 text-red-500 hover:text-red-700"><X size={16} /></button>
+        </div>
+      )}
       {/* Header */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -978,7 +985,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <StatusBadge status="partial" />
                       <button onClick={() => setUndoTarget(item)}
-                        className="min-h-[32px] min-w-[32px] flex items-center justify-center text-gray-400 hover:text-red-500 rounded"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-red-500 rounded"
                         title="Undo pull">
                         <X size={14} />
                       </button>
@@ -1020,7 +1027,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) - 1)}
-                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
                         −
                       </button>
                       <span className="min-w-[28px] text-center text-sm font-semibold text-gray-800">
@@ -1028,7 +1035,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                       </span>
                       <button
                         onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) + 1)}
-                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
                         +
                       </button>
                     </div>
@@ -1049,7 +1056,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <StatusBadge status="pulled" />
                       <button onClick={() => setUndoTarget(item)}
-                        className="min-h-[32px] min-w-[32px] flex items-center justify-center text-gray-400 hover:text-red-500 rounded"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-red-500 rounded"
                         title="Undo pull">
                         <X size={14} />
                       </button>
@@ -1087,7 +1094,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) - 1)}
-                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
                         −
                       </button>
                       <span className="min-w-[28px] text-center text-sm font-semibold text-gray-800">
@@ -1095,7 +1102,7 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
                       </span>
                       <button
                         onClick={() => setPullQty(item.skuId, getPullQty(item.skuId, defaultQty) + 1)}
-                        className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm">
                         +
                       </button>
                     </div>
@@ -1186,11 +1193,17 @@ function ProductDetailView({ productId, inventory, skus, user, onBack }) {
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShortfallInfo(null)}>
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm flex flex-col max-h-[80dvh]"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 px-5 pt-5 pb-3 border-b border-gray-100">
-              <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
-              <h3 className="text-base font-semibold text-gray-800">
-                {shortfallInfo.allZero ? 'No Stock Available' : 'Insufficient Stock'}
-              </h3>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
+                <h3 className="text-base font-semibold text-gray-800">
+                  {shortfallInfo.allZero ? 'No Stock Available' : 'Insufficient Stock'}
+                </h3>
+              </div>
+              <button onClick={() => setShortfallInfo(null)} aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+                <X size={22} />
+              </button>
             </div>
             <div className="overflow-y-auto flex-1 px-5 py-4">
               <p className="text-sm text-gray-600 mb-3">
@@ -1403,6 +1416,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState('');
   const [view, setView] = useState('list'); // 'list' | 'detail' | 'completed'
   const [selectedProductId, setSelectedProductId] = useState(null);
 
@@ -1413,14 +1427,14 @@ export default function ProductsPage() {
       orderBy('createdAt', 'desc')
     );
     const unsub1 = onSnapshot(qProducts,
-      snap => { setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
-      (err) => { console.error('Products query error:', err); setLoading(false); }
+      snap => { setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); setListError(''); },
+      (err) => { console.error('Products query error:', err); setLoading(false); setListError('Failed to load products. Check your connection.'); }
     );
 
     const qJobs = query(collection(db, 'jobs'), where('isDeleted', '==', false), orderBy('jobName'));
     const unsub2 = onSnapshot(qJobs,
       snap => { setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
-      (err) => { console.error('Jobs query error:', err); }
+      (err) => { console.error('Jobs query error:', err); setListError('Failed to load jobs. Check your connection.'); }
     );
 
     return () => { unsub1(); unsub2(); };
@@ -1446,6 +1460,9 @@ export default function ProductsPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-white">
+      {listError && (
+        <div className="mx-4 mt-2 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{listError}</div>
+      )}
       {view === 'detail' && selectedProductId ? (
         <ProductDetailView
           productId={selectedProductId}

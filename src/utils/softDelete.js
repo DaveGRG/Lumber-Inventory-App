@@ -34,7 +34,7 @@ export async function softDelete(collectionName, docId, userId, userName) {
   await addDoc(collection(db, 'auditLog'), {
     event: 'ITEM_DELETED',
     skuId: data.skuId ?? data.id ?? null,
-    sku: data.sku ?? data.sku ?? null,
+    sku: data.sku ?? null,
     location: data.location ?? null,
     userId,
     userName,

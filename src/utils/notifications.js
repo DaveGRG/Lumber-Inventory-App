@@ -31,10 +31,7 @@ export async function triggerNotification(eventType, subject, text, options = {}
     });
     extraRecipients.forEach(e => { if (e) emails.add(e); });
 
-    if (emails.size === 0) {
-      console.log(`[triggerNotification] ${eventType} — no recipients`);
-      return;
-    }
+    if (emails.size === 0) return;
 
     // Write one pendingEmail doc per recipient
     const writes = [...emails].map(to =>
@@ -48,8 +45,6 @@ export async function triggerNotification(eventType, subject, text, options = {}
       })
     );
     await Promise.all(writes);
-
-    console.log(`[triggerNotification] ${eventType} — queued ${emails.size} email(s)`);
   } catch (err) {
     // Notification failure must never block the primary action
     console.error(`[triggerNotification] ${eventType} failed:`, err);

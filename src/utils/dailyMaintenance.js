@@ -70,6 +70,5 @@ export async function runDailyMaintenance() {
     console.error('[maintenance] Overdue check error:', err);
   }
 
-  console.log(`[maintenance] Done — trash purged: ${trashPurged}, overdue: ${overdueLocations}`);
   return { trashPurged, overdueLocations };
 }

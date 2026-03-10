@@ -128,7 +128,7 @@ function AddVendorPopup({ user, onClose }) {
         onClick={e => e.stopPropagation()}
       >
         <button onClick={onClose} aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+          className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
           <X size={22} />
         </button>
         <h2 className="text-base font-semibold pr-8 mb-4" style={{ color: '#2D5016' }}>Add Vendor</h2>
@@ -319,7 +319,7 @@ function AddUserPopup({ currentUser, onClose }) {
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
         onClick={e => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+          className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
           <X size={22} />
         </button>
         <h2 className="text-base font-semibold pr-8 mb-4" style={{ color: '#2D5016' }}>Add User</h2>
@@ -372,6 +372,7 @@ function EditUserPopup({ targetUser, currentUser, onClose }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
 
   const isSuperAdmin = currentUser.email === SUPER_ADMIN_EMAIL;
   const isSelf = targetUser.id === currentUser.uid || targetUser.email === currentUser.email;
@@ -426,7 +427,7 @@ function EditUserPopup({ targetUser, currentUser, onClose }) {
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
         onClick={e => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
+          className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg">
           <X size={22} />
         </button>
         <h2 className="text-base font-semibold pr-8 mb-0.5" style={{ color: '#2D5016' }}>Edit User</h2>
@@ -446,7 +447,7 @@ function EditUserPopup({ targetUser, currentUser, onClose }) {
           <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200">
             <span className="text-sm font-medium text-gray-700">Account Active</span>
             <button
-              onClick={() => setIsActive(a => !a)}
+              onClick={() => setShowDeactivateConfirm(true)}
               className="w-12 h-6 rounded-full transition-colors flex items-center px-0.5 flex-shrink-0"
               style={{ backgroundColor: isActive ? '#4CB31D' : '#d1d5db' }}
               aria-label="Toggle active"
@@ -485,6 +486,18 @@ function EditUserPopup({ targetUser, currentUser, onClose }) {
         destructive
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={showDeactivateConfirm}
+        title={isActive ? 'Deactivate Account?' : 'Activate Account?'}
+        message={isActive
+          ? `${targetUser.name || targetUser.email} will no longer be able to sign in.`
+          : `${targetUser.name || targetUser.email} will be able to sign in again.`}
+        confirmLabel={isActive ? 'Deactivate' : 'Activate'}
+        destructive={isActive}
+        onConfirm={() => { setIsActive(a => !a); setShowDeactivateConfirm(false); }}
+        onCancel={() => setShowDeactivateConfirm(false)}
       />
     </div>
   );
@@ -635,7 +648,7 @@ function RestoreCenterCollapsible({ cardBg, loadingTrash, trashItems, onRestore,
       {open && (
         <div className="px-4 pb-4">
           {loadingTrash ? (
-            <p className="text-sm text-gray-400">Loading…</p>
+            <Spinner />
           ) : count === 0 ? (
             <p className="text-sm text-gray-400 italic">Trash is empty.</p>
           ) : (
@@ -831,7 +844,7 @@ function AdminControlView({ onBack, user }) {
               Send overdue reminder after this many days without a count (per location).
             </p>
             {settingsLoading ? (
-              <p className="text-sm text-gray-400">Loading…</p>
+              <Spinner />
             ) : (
               <div className="flex items-center gap-3">
                 <input
@@ -878,7 +891,7 @@ function AdminControlView({ onBack, user }) {
               Trigger a notification when a single adjustment changes quantity by this amount or more.
             </p>
             {settingsLoading ? (
-              <p className="text-sm text-gray-400">Loading…</p>
+              <Spinner />
             ) : (
               <div className="flex items-center gap-3">
                 <input
@@ -1498,17 +1511,16 @@ function QRDetailPopup({ qr, onClose }) {
             <p className="text-xs text-gray-400 mt-0.5">{formatDate(qr.sentAt)} · {qr.sentBy}</p>
           </div>
           <button onClick={onClose} aria-label="Close"
-            className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg ml-3">
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg ml-3">
             <X size={22} />
           </button>
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4">
           <p className="text-sm font-medium text-gray-700 mb-1">
-            {qr.vendorName}
-            {qr.vendorContact ? ` — ${qr.vendorContact}` : ''}
+            Sent to: {qr.recipientName}
           </p>
-          <p className="text-xs text-gray-400 mb-4">{qr.vendorEmail}</p>
+          <p className="text-xs text-gray-400 mb-4">{qr.recipientEmail}</p>
 
           <div className="flex flex-col gap-2 mb-4">
             {(qr.items ?? []).map((item, idx) => (
@@ -1547,7 +1559,7 @@ function QRDetailPopup({ qr, onClose }) {
   );
 }
 
-// ─── QUOTE REQUESTS VIEW ─────────────────────────────────────────────────────
+// ─── PURCHASE REQUESTS VIEW ─────────────────────────────────────────────────────
 function QuoteRequestsView({ onBack }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1567,14 +1579,14 @@ function QuoteRequestsView({ onBack }) {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <SubpageHeader title="Quote Requests" onBack={onBack} />
+      <SubpageHeader title="Purchase Requests" onBack={onBack} />
 
       <div className="flex-1 overflow-y-auto pb-20 md:pb-4">
         {loading ? (
           <Spinner />
         ) : requests.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-gray-400 text-sm">No quote requests sent yet.</p>
+            <p className="text-gray-400 text-sm">No purchase requests sent yet.</p>
           </div>
         ) : requests.map((qr, idx) => (
           <button
@@ -1590,7 +1602,7 @@ function QuoteRequestsView({ onBack }) {
                 <span className="text-xs text-gray-400">{formatDate(qr.sentAt)}</span>
               </div>
               <p className="text-xs text-gray-600 mt-0.5">
-                {qr.vendorName} · {qr.items?.length ?? 0} SKU{(qr.items?.length ?? 0) !== 1 ? 's' : ''}
+                {qr.recipientName} · {qr.items?.length ?? 0} SKU{(qr.items?.length ?? 0) !== 1 ? 's' : ''}
               </p>
               <p className="text-xs text-gray-400">Sent by {qr.sentBy}</p>
             </div>
@@ -2073,6 +2085,7 @@ function ProjectsView({ onBack, user }) {
       await softDelete('jobs', deleteTarget.id, user.uid, user.name || user.email);
     } catch (err) {
       console.error('Failed to delete job:', err);
+      alert('Failed to delete project. Please try again.');
     }
     setDeleteSaving(false);
     setDeleteTarget(null);
@@ -2221,9 +2234,9 @@ export default function MorePage() {
   const cardBg = hiViz ? 'bg-white border-2 border-black' : 'bg-gray-50 border border-gray-200';
 
   const cards = [
-    { id: 'vendorContacts', label: 'Vendor Contacts', desc: 'Manage vendor contacts for quote requests.', active: true },
+    { id: 'vendorContacts', label: 'Vendor Contacts', desc: 'Manage vendor contacts.', active: true },
     { id: 'userManagement', label: 'User Management', desc: 'Add and manage team members.', active: true },
-    { id: 'quoteRequests', label: 'Quote Requests', desc: 'View all sent quote requests.', active: true },
+    { id: 'quoteRequests', label: 'Purchase Requests', desc: 'View all sent purchase requests.', active: true },
     { id: 'notifications', label: 'Notifications', desc: 'Configure notification recipients per event.', active: true },
     { id: 'reconciliationReports', label: 'Reconciliation Reports', desc: 'View past physical count reports.', active: true },
     { id: 'productLibrary', label: 'Product Library', desc: 'Browse and assign product templates.', active: true },

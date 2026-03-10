@@ -95,13 +95,13 @@ async function findUserByEmail(firebaseUser) {
   const emailDoc = await getDoc(doc(db, 'users', emailLower));
   if (emailDoc.exists()) {
     await stampUid(emailDoc.ref, emailDoc.data(), firebaseUser);
-    return { ...emailDoc.data(), email: emailLower, uid: firebaseUser.uid };
+    return { ...emailDoc.data(), email: emailLower, uid: firebaseUser.uid, docId: emailLower };
   }
 
   // 2. Try doc keyed by UID (already-migrated users like Dave, Kate, Lisa, Mary, Pat)
   const uidDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
   if (uidDoc.exists()) {
-    return { ...uidDoc.data(), uid: firebaseUser.uid };
+    return { ...uidDoc.data(), uid: firebaseUser.uid, docId: firebaseUser.uid };
   }
 
   // 3. Fallback: query by email field (handles any doc ID format)
@@ -110,7 +110,7 @@ async function findUserByEmail(firebaseUser) {
   if (!snap.empty) {
     const matchDoc = snap.docs[0];
     await stampUid(matchDoc.ref, matchDoc.data(), firebaseUser);
-    return { ...matchDoc.data(), email: emailLower, uid: firebaseUser.uid };
+    return { ...matchDoc.data(), email: emailLower, uid: firebaseUser.uid, docId: matchDoc.id };
   }
 
   // 4. Bootstrap: auto-create John or Dave if no users exist yet

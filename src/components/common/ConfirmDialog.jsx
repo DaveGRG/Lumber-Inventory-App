@@ -28,7 +28,7 @@ export default function ConfirmDialog({
           onClick={onCancel}
           disabled={saving}
           aria-label="Close"
-          className="absolute top-3 right-3 min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg transition-colors disabled:opacity-30"
+          className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 rounded-lg transition-colors disabled:opacity-30"
         >
           <X size={22} />
         </button>

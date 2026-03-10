@@ -18,7 +18,7 @@ export function ThemeProvider({ children }) {
     const next = !hiViz;
     setHiViz(next);
     if (user?.uid) {
-      await updateDoc(doc(db, 'users', user.uid), { hiVizMode: next });
+      await updateDoc(doc(db, 'users', user.docId || user.uid), { hiVizMode: next });
     }
   };
 

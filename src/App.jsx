@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { BelowParProvider } from './context/BelowParContext';
@@ -40,27 +40,6 @@ function ProtectedRoute({ children }) {
 }
 
 function AppRoutes() {
-  const location = useLocation();
-
-  // TEMP: Firefox overflow diagnostic — remove after debugging
-  useEffect(() => {
-    const checkOverflow = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      console.log('=== PAGE:', location.pathname);
-      document.querySelectorAll('*').forEach(el => {
-        if (el.scrollWidth > w) {
-          console.warn('OVERFLOW-X:', el.tagName, el.className, 'scrollWidth:', el.scrollWidth, 'windowWidth:', w, 'excess:', el.scrollWidth - w, 'px');
-        }
-        if (el.scrollHeight > h) {
-          console.warn('OVERFLOW-Y:', el.tagName, el.className, 'scrollHeight:', el.scrollHeight, 'windowHeight:', h, 'excess:', el.scrollHeight - h, 'px');
-        }
-      });
-      console.log('=== DONE. window:', w, 'x', h, 'docScroll:', document.documentElement.scrollWidth, 'x', document.documentElement.scrollHeight);
-    };
-    setTimeout(checkOverflow, 1500);
-  }, [location.pathname]);
-
   return (
     <Routes>
       <Route path="/" element={<SplashPage />} />
