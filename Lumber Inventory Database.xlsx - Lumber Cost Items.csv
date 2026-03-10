@@ -1,0 +1,54 @@
+SKU,Category,Farm_Par_Level,MKE_Par_Level,Status
+CDR 1x10x12,CDR,0,0,Active
+CDR 1x12x12,CDR,8,4,Active
+CDR 1x6x12,CDR,50,25,Active
+CDR 1x8x12,CDR,50,25,Active
+CDR BVL-16,CDR,0,0,Active
+CDR BVL-12,CDR,10,4,Active
+CDR 2x10x14,CDR,0,0,Active
+CDR 2x4x10,CDR,0,0,Discontinuing
+CDR 2x4x12,CDR,0,0,Active
+CDR 2x6x12,CDR,50,25,Active
+CDR 2x6x16,CDR,0,0,Active
+CDR 2x8x12,CDR,0,0,Active
+CDR 4x4x10,CDR,0,0,Discontinuing
+CDR 4x4x12,CDR,16,8,Active
+CDR 4x4x16,CDR,0,0,Active
+CDR 4x6x10,CDR,0,0,Discontinuing
+CDR 4x6x12,CDR,0,0,Discontinuing
+CDR DK x12,CDR,0,0,Active
+CDR DK x16,CDR,0,0,Discontinuing
+CDR 6x6x12,CDR,0,0,Active
+CDR 6x8x10,CDR,0,0,Discontinuing
+CDR 6x8x12,CDR,0,0,Discontinuing
+CT 2x10x08,CT,0,0,Active
+CT 2x10x12,CT,0,0,Active
+CT 2x12x08,CT,0,0,Active
+CT 2x12x12,CT,0,0,Active
+CT 2x4x08,CT,0,0,Active
+CT 2x4x12,CT,0,0,Active
+CT 2x6x08,CT,0,0,Active
+CT 2x6x12,CT,0,0,Active
+CT 2x8x08,CT,0,0,Active
+CT 2x8x12,CT,0,0,Active
+CT 4x4x08,CT,0,0,Active
+CT 4x4x12,CT,0,0,Active
+CT 6x6x08,CT,0,0,Active
+CT 6x6x12,CT,0,0,Active
+GT 1x4x12,GT,0,0,Active
+GT 1x8x08,GT,0,0,Active
+GT 2x10x08,GT,0,0,Active
+GT 2x10x12,GT,0,0,Active
+GT 2x12x08,GT,0,0,Active
+GT 2x12x12,GT,0,0,Active
+GT 2x2x08,GT,0,0,Active
+GT 2x4x08,GT,0,0,Active
+GT 2x4x12,GT,0,0,Active
+GT 2x6x08,GT,0,0,Active
+GT 2x6x12,GT,0,0,Active
+GT 2x8x08,GT,0,0,Active
+GT 2x8x12,GT,0,0,Active
+GT 4x4x08,GT,0,0,Active
+GT 4x4x12,GT,0,0,Active
+GT 6x6x08,GT,0,0,Active
+GT 6x6x12 ,GT,0,0,Active

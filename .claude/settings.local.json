@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "WebFetch(domain:www.grgplayscapes.com)",
+      "WebSearch",
+      "Bash(npx vite:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(npx firebase:*)",
+      "Bash(cd:*)",
+      "Bash(npx firebase-tools:*)",
+      "Bash(node:*)"
+    ]
+  }
+}

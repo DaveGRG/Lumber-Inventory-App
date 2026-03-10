@@ -43,24 +43,20 @@ exports.onPendingEmailCreated = onDocumentCreated("pendingEmails/{docId}", async
   const { to, subject, text } = snap.data();
   console.log(`[email] Sending to ${to}: "${subject}"`);
 
-  // ── SendGrid integration (uncomment when API key is configured) ──
-  // const sgMail = require("@sendgrid/mail");
-  // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  // try {
-  //   await sgMail.send({
-  //     to,
-  //     from: "sales@grgplayscapes.com",
-  //     subject,
-  //     text,
-  //   });
-  //   await snap.ref.update({ status: "sent", sentAt: new Date() });
-  // } catch (err) {
-  //   console.error("[email] SendGrid error:", err);
-  //   await snap.ref.update({ status: "failed", error: err.message });
-  // }
-
-  // Stub: mark as sent immediately (remove when SendGrid is configured)
-  await snap.ref.update({ status: "sent", sentAt: new Date() });
+  const sgMail = require("@sendgrid/mail");
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  try {
+    await sgMail.send({
+      to,
+      from: "sales@grgplayscapes.com",
+      subject,
+      text,
+    });
+    await snap.ref.update({ status: "sent", sentAt: new Date() });
+  } catch (err) {
+    console.error("[email] SendGrid error:", err);
+    await snap.ref.update({ status: "failed", error: err.message });
+  }
 });
 
 // ─── MAINTENANCE (SCHEDULED) ─────────────────────────────────────────────────

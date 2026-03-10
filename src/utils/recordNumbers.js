@@ -3,12 +3,12 @@ import { doc, runTransaction } from 'firebase/firestore';
 
 // Generates auto-incrementing record numbers that reset each year
 // type: 'transfers' | 'quoteRequests' | 'reconciliationReports' | 'pulls'
-// Returns: 'T#2026-0001' | 'QR#2026-0001' | 'RR#2026-0001' | 'P#2026-0001'
+// Returns: 'T#2026-0001' | 'PR#-0001' | 'RR#2026-0001' | 'P#2026-0001'
 export async function generateRecordNumber(type) {
   const year = new Date().getFullYear();
   const prefix = {
     transfers: 'T',
-    quoteRequests: 'QR',
+    quoteRequests: 'PR',
     reconciliationReports: 'RR',
     pulls: 'P',
   }[type];
@@ -25,6 +25,9 @@ export async function generateRecordNumber(type) {
 
   if (type === 'reconciliationReports') {
     return `RR# ${String(newNumber).padStart(4, '0')}`;
+  }
+  if (type === 'quoteRequests') {
+    return `PR#-${String(newNumber).padStart(4, '0')}`;
   }
   return `${prefix}#${year}-${String(newNumber).padStart(4, '0')}`;
 }

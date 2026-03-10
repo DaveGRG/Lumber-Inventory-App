@@ -1,7 +1,7 @@
 // Notification event type constants used by triggerNotification() and NotificationsView checklist.
 
 export const NOTIFICATION_EVENTS = {
-  QUOTE_REQUEST_SENT: 'QUOTE_REQUEST_SENT',
+  PURCHASE_REQUEST_SENT: 'PURCHASE_REQUEST_SENT',
   RECONCILIATION_SUBMITTED: 'RECONCILIATION_SUBMITTED',
   TRANSFER_SHIPPED: 'TRANSFER_SHIPPED',
   TRANSFER_RECEIVED: 'TRANSFER_RECEIVED',
@@ -16,7 +16,7 @@ export const NOTIFICATION_EVENTS = {
 };
 
 export const EVENT_LABELS = {
-  QUOTE_REQUEST_SENT: 'Quote Request Sent',
+  PURCHASE_REQUEST_SENT: 'Purchase Request Sent',
   RECONCILIATION_SUBMITTED: 'Reconciliation Submitted',
   TRANSFER_SHIPPED: 'Transfer Shipped',
   TRANSFER_RECEIVED: 'Transfer Received',
@@ -32,7 +32,7 @@ export const EVENT_LABELS = {
 
 // Display ordering for checklists
 export const EVENT_ORDER = [
-  'QUOTE_REQUEST_SENT',
+  'PURCHASE_REQUEST_SENT',
   'RECONCILIATION_SUBMITTED',
   'TRANSFER_SHIPPED',
   'TRANSFER_RECEIVED',
